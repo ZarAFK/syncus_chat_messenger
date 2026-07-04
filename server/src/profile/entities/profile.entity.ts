@@ -15,10 +15,10 @@ export class Profile {
   profile_id: number;
 
   @Column({ nullable: true })
-  profile_picture: string;
+  profile_picture?: string;
 
   @Column({ nullable: true, type: 'text' })
-  bio: string;
+  bio?: string;
 
   @CreateDateColumn()
   created_at: Date;

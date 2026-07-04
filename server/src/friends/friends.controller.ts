@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Query,
+  Delete,
 } from '@nestjs/common';
 import { FriendsService } from './friends.service';
 import { CreateFriendDto } from './dto/create-friend.dto';
@@ -20,16 +21,24 @@ export class FriendsController {
     return this.friendsService.create(createFriendDto);
   }
 
-  // List semua teman yang sudah accept
   @Get()
   findAll(@Query('userId') userId: number) {
     return this.friendsService.getFriends(userId);
   }
 
-  // List permintaan friend request yang masuk (buat si B)
+  @Get('relations')
+  getRelations(@Query('userId') userId: number) {
+    return this.friendsService.getAllRelations(userId);
+  }
+
   @Get('pending')
   getPendingRequests(@Query('userId') userId: number) {
     return this.friendsService.getPendingRequests(userId);
+  }
+
+  @Get('request')
+  getFriendRequests(@Query('userId') userId: number) {
+    return this.friendsService.getFriendRequests(userId);
   }
 
   // Accept friend request
@@ -42,5 +51,11 @@ export class FriendsController {
   @Patch(':id/reject')
   reject(@Param('id') id: number) {
     return this.friendsService.rejectFriendRequest(id);
+  }
+
+  // Delete relationship (unfriend)
+  @Delete(':id')
+  delete(@Param('id') id: number) {
+    return this.friendsService.deleteRelation(id);
   }
 }

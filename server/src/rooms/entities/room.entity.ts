@@ -8,9 +8,8 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
-  OneToOne,
+  JoinTable,
 } from 'typeorm';
-import { roomTag } from '../interfaces/room.interface';
 import { Users } from 'src/users/entities/user.entity';
 import { Message } from 'src/messages/entities/message.entity';
 import { RoomsCategory } from 'src/rooms_category/entities/rooms_category.entity';
@@ -26,6 +25,9 @@ export class Room {
 
   @Column({ nullable: true, type: 'text' })
   room_description: string;
+
+  @Column({ nullable: true, type: 'text' })
+  room_picture: string;
 
   @ManyToOne(
     () => RoomsCategory,
@@ -43,17 +45,20 @@ export class Room {
   @OneToMany(() => Message, (message) => message.room)
   messages: Message[];
 
-  @ManyToMany(() => Users, (user) => user.favorite_rooms)
+  @ManyToMany(() => Users, (user) => user.favoriteRooms)
+  @JoinTable({
+    name: 'user_favorite_rooms',
+    joinColumn: { name: 'room_id', referencedColumnName: 'room_id' },
+    inverseJoinColumn: { name: 'user_id', referencedColumnName: 'user_id' },
+  })
   favorited_by: Users[];
 
-  @ManyToOne(() => Users, (room) => room.created_rooms, {
-    onDelete: 'CASCADE',
-  })
-  @OneToMany(() => RoomMember, (roomMember) => roomMember.room_member)
-  roomMembers: RoomMember[];
-
+  @ManyToOne(() => Users, (user) => user.createdRooms, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'creator_id' })
   creator: Users;
+
+  @OneToMany(() => RoomMember, (roomMember) => roomMember.room)
+  roomMembers: RoomMember[];
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

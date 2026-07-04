@@ -35,4 +35,5 @@ export class Friend {
 
   @CreateDateColumn()
   created_at: Date;
+  length: number;
 }

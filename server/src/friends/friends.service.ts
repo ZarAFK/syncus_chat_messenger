@@ -9,6 +9,9 @@ import { Friend } from './entities/friend.entity';
 import { CreateFriendDto } from './dto/create-friend.dto';
 import { FriendStatus } from './interface/friend.interface'; // pastikan path benar
 import { Users } from 'src/users/entities/user.entity';
+import { NotificationService } from 'src/notification/notification.service';
+import { notificationType } from 'src/notification/interface/notification.interface';
+
 
 @Injectable()
 export class FriendsService {
@@ -17,6 +20,7 @@ export class FriendsService {
     private readonly friendRepository: Repository<Friend>,
     @InjectRepository(Users)
     private readonly userRepository: Repository<Users>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(createFriendDto: CreateFriendDto) {
@@ -35,13 +39,15 @@ export class FriendsService {
     }
 
     // cek apakah sudah ada relasi A-B atau B-A
-    const existingFriend = await this.friendRepository.findOne({
-      where: [
-        { user_id: { user_id }, friend_id: { user_id: friend_id } }, // ✅ pakai relasi object
-        { user_id: { user_id: friend_id }, friend_id: { user_id } },
-      ],
-      relations: ['user_id', 'friend_id'],
-    });
+    const existingFriend = await this.friendRepository
+      .createQueryBuilder('friend')
+      .leftJoinAndSelect('friend.user_id', 'user')
+      .leftJoinAndSelect('friend.friend_id', 'friendUser')
+      .where(
+        '((friend.user_id = :userId AND friend.friend_id = :friendId) OR (friend.user_id = :friendId AND friend.friend_id = :userId))',
+        { userId: user_id, friendId: friend_id }
+      )
+      .getOne();
 
     if (existingFriend) {
       throw new BadRequestException(
@@ -55,17 +61,44 @@ export class FriendsService {
       status: FriendStatus.PENDING,
     });
 
-    return this.friendRepository.save(friend);
+    const savedFriend = await this.friendRepository.save(friend);
+
+    // Create a notification for friendUser (recipient)
+    await this.notificationService.create(
+      friendUser.user_id,
+      user.user_id,
+      notificationType.FRIEND_REQUEST,
+      savedFriend.id,
+      `@${user.username} mengirimkan permintaan pertemanan.`,
+    );
+
+    return savedFriend;
   }
 
   async acceptFriendRequest(id: number) {
     const friendRequest = await this.friendRepository.findOne({
       where: { id },
+      relations: ['user_id', 'friend_id'],
     });
     if (!friendRequest) throw new NotFoundException('Friend request not found');
 
     friendRequest.status = FriendStatus.ACCEPTED;
-    return this.friendRepository.save(friendRequest);
+    friendRequest.accepted_at = new Date();
+    const saved = await this.friendRepository.save(friendRequest);
+
+    // Create a notification for the sender (user_id)
+    await this.notificationService.create(
+      friendRequest.user_id.user_id,
+      friendRequest.friend_id.user_id,
+      notificationType.FRIEND_ACCEPT,
+      saved.id,
+      `@${friendRequest.friend_id.username} menerima permintaan pertemanan Anda.`,
+    );
+
+    // Clean up the friend request notification for the receiver
+    await this.notificationService.removeByRelatedIdAndType(id, notificationType.FRIEND_REQUEST);
+
+    return saved;
   }
 
   async rejectFriendRequest(id: number) {
@@ -75,23 +108,75 @@ export class FriendsService {
     if (!friendRequest) throw new NotFoundException('Friend request not found');
 
     friendRequest.status = FriendStatus.REJECTED;
-    return this.friendRepository.save(friendRequest);
+    const saved = await this.friendRepository.save(friendRequest);
+
+    // Clean up the friend request notification
+    await this.notificationService.removeByRelatedIdAndType(id, notificationType.FRIEND_REQUEST);
+
+    return saved;
   }
 
   async getFriends(userId: number) {
-    return this.friendRepository.find({
-      where: [
-        { user_id: { user_id: userId }, status: FriendStatus.ACCEPTED }, // ✅ relasi object
-        { friend_id: { user_id: userId }, status: FriendStatus.ACCEPTED },
-      ],
-      relations: ['user_id', 'friend_id'],
-    });
+    const friendExists = await this.friendRepository
+      .createQueryBuilder('friend')
+      .where('friend.user_id = :userId OR friend.friend_id = :userId', { userId })
+      .getOne();
+
+    if (!friendExists) {
+      throw new NotFoundException('No friend found');
+    }
+
+    return this.friendRepository
+      .createQueryBuilder('friend')
+      .leftJoinAndSelect('friend.user_id', 'user')
+      .leftJoinAndSelect('friend.friend_id', 'friendUser')
+      .where(
+        '((friend.user_id = :userId OR friend.friend_id = :userId) AND friend.status = :status)',
+        { userId, status: FriendStatus.ACCEPTED }
+      )
+      .getMany();
+  }
+
+  async getFriendRequests(userId: number) {
+    const request = await this.friendRepository
+      .createQueryBuilder('friend')
+      .leftJoinAndSelect('friend.user_id', 'user')
+      .leftJoinAndSelect('friend.friend_id', 'friendUser')
+      .where('friend.friend_id = :userId AND friend.status = :status', {
+        userId,
+        status: FriendStatus.PENDING,
+      })
+      .getOne();
+
+    if (!request) {
+      throw new NotFoundException('No Friend here bro');
+    }
+    return request;
   }
 
   async getPendingRequests(userId: number) {
-    return this.friendRepository.find({
-      where: { friend_id: Equal(userId), status: FriendStatus.PENDING },
-      relations: ['user_id'],
-    });
+    return this.friendRepository
+      .createQueryBuilder('friend')
+      .leftJoinAndSelect('friend.user_id', 'user')
+      .where('friend.friend_id = :userId AND friend.status = :status', {
+        userId,
+        status: FriendStatus.PENDING,
+      })
+      .getMany();
+  }
+
+  async getAllRelations(userId: number) {
+    return this.friendRepository
+      .createQueryBuilder('friend')
+      .leftJoinAndSelect('friend.user_id', 'user')
+      .leftJoinAndSelect('friend.friend_id', 'friendUser')
+      .where('friend.user_id = :userId OR friend.friend_id = :userId', { userId })
+      .getMany();
+  }
+
+  async deleteRelation(id: number) {
+    const relation = await this.friendRepository.findOne({ where: { id } });
+    if (!relation) throw new NotFoundException('Relation not found');
+    return this.friendRepository.remove(relation);
   }
 }

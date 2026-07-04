@@ -6,22 +6,31 @@ export const typeOrmConfig = (
   configService: ConfigService,
 ): TypeOrmModuleOptions => {
   const dbUrl = configService.get<string>('DATABASE_URL');
-  if (!dbUrl) {
-    throw new Error('DATABASE_URL is not defined in the environment variables');
-  }
 
-  const parsedUrl = new url.URL(dbUrl);
+  if (dbUrl) {
+    const parsedUrl = new url.URL(dbUrl);
+
+    return {
+      type: 'mysql',
+      host: parsedUrl.hostname,
+      port: parseInt(parsedUrl.port, 10),
+      username: parsedUrl.username,
+      password: parsedUrl.password,
+      database: parsedUrl.pathname.replace('/', ''),
+      autoLoadEntities: true,
+      synchronize: true,
+    };
+  }
 
   return {
     type: 'mysql',
-    host: parsedUrl.hostname,
-    port: parseInt(parsedUrl.port),
-    username: parsedUrl.username,
-    password: parsedUrl.password,
-    database: parsedUrl.pathname.replace('/', ''),
+    host: configService.get<string>('DB_HOST', 'localhost'),
+    port: parseInt(configService.get<string>('DB_PORT', '3306'), 10),
+    username: configService.get<string>('DB_USERNAME', 'root'),
+    password: configService.get<string>('DB_PASSWORD', ''),
+    database: configService.get<string>('DB_NAME', 'test'),
     autoLoadEntities: true,
-    synchronize: false,
-    entities: ['dist/**/*.entity{.ts,.js}'],
-    migrations: ['dist/src/migrations/*{.ts,.js}'],
+    synchronize: true,
   };
+
 };

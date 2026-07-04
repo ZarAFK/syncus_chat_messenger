@@ -1,4 +1,13 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateAuthDto } from './create-auth.dto';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 
-export class UpdateAuthDto extends PartialType(CreateAuthDto) {}
+export class UpdateAuthDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(6)
+  hash_password?: string;
+
+  // field lain yang sudah ada
+  @IsOptional()
+  @IsString()
+  email?: string;
+}

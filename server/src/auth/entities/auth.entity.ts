@@ -12,6 +12,9 @@ export class Auth {
   @PrimaryGeneratedColumn()
   auth_id: number;
 
+  @Column({ nullable: false, unique: true })
+  email: string;
+
   @Column({ nullable: false })
   hash_password: string;
 

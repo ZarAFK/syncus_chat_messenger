@@ -18,7 +18,6 @@ export enum UserStatus {
 export enum genderEnum {
   MALE = 'male',
   FEMALE = 'female',
-  OTHER = 'other',
 }
 
 export enum countryEnum {

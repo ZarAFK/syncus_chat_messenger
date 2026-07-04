@@ -1,37 +1,56 @@
+import { Type, Transform } from 'class-transformer';
 import {
-  IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsNumber,
+  IsInt,
+  ValidateNested,
   IsEnum,
-  MinLength,
 } from 'class-validator';
-import { countryEnum, genderEnum } from '../interface/users.interface'; // sesuaikan path
+
+import { countryEnum, genderEnum } from '../interface/users.interface';
+import { CreateAuthDto } from 'src/auth/dto/create-auth.dto';
+
+/**
+ * Utility untuk map string/number ke enum target.
+ * Menghindari bug "[object Object]" dengan cek tipe.
+ */
+const mapToEnum =
+  <T extends Record<string, string | number>>(enumObj: T) =>
+  ({ value }: { value: unknown }): T[keyof T] | undefined => {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      return undefined; // hanya izinkan string/number
+    }
+
+    const str = String(value).trim().toLowerCase();
+    const entry = Object.values(enumObj).find(
+      (v) => String(v).toLowerCase() === str,
+    );
+
+    return entry as T[keyof T] | undefined;
+  };
 
 export class CreateUserDto {
   @IsNotEmpty()
   @IsString()
   username: string;
 
-  @IsEmail()
-  @IsNotEmpty()
-  email: string;
-
   @IsOptional()
-  @IsNumber()
+  @Type(() => Number)
+  @IsInt()
   age?: number;
 
   @IsNotEmpty()
-  @IsEnum(countryEnum)
+  @Transform(mapToEnum(countryEnum), { toClassOnly: true })
+  @IsEnum(countryEnum, { message: 'Invalid country' })
   country: countryEnum;
 
   @IsNotEmpty()
-  @IsEnum(genderEnum)
+  @Transform(mapToEnum(genderEnum), { toClassOnly: true })
+  @IsEnum(genderEnum, { message: 'Invalid gender' })
   gender: genderEnum;
 
-  @IsNotEmpty()
-  @IsString()
-  @MinLength(20)
-  password: string;
+  @ValidateNested()
+  @Type(() => CreateAuthDto)
+  auth: CreateAuthDto;
 }

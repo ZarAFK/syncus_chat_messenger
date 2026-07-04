@@ -28,6 +28,10 @@ export class CreateRoomDto {
   @IsOptional()
   rule?: string;
 
+  @IsString()
+  @IsOptional()
+  room_picture?: string;
+
   @IsNumber()
   @IsNotEmpty()
   category_room_id: number;

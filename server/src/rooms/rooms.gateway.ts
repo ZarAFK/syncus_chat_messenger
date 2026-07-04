@@ -31,31 +31,173 @@ export class RoomsGateway {
 
   constructor(private readonly roomsService: RoomsService) {}
 
+  @SubscribeMessage('joinPrivateRoom')
+  async joinPrivateRoom(
+    @MessageBody() body: { userAId: number; userBId: number },
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ event: string; data: Room | string }> {
+    try {
+      const room = await this.roomsService.getOrCreatePrivateRoom(
+        body.userAId,
+        body.userBId,
+      );
+      client.join(`room_${room.room_id}`);
+      return { event: 'joinedPrivateRoom', data: room };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { event: 'joinPrivateRoomError', data: message };
+    }
+  }
+
+  @SubscribeMessage('joinRoom')
+  async joinRoom(
+    @MessageBody() body: { roomId: number },
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ success: boolean; data?: Room; error?: string }> {
+    try {
+      const userId = client.data.userId;
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      const { room, systemMessage } = await this.roomsService.joinRoom(body.roomId, userId);
+      client.join(`room_${room.room_id}`);
+      this.server.to(`room_${room.room_id}`).emit('roomMemberJoined', { room });
+      if (systemMessage) {
+        this.server.to(`room_${room.room_id}`).emit('newMessage', systemMessage);
+      }
+      return { success: true, data: room };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
+  }
+
+  // PROMOTE MEMBER
+  @SubscribeMessage('promoteMember')
+  async promoteMember(
+    @MessageBody() body: { roomId: number; targetUserId: number; role: 'admin' | 'member' },
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ event: string; data: any }> {
+    try {
+      const senderUserId = client.data.userId;
+      if (!senderUserId) throw new Error('Unauthorized');
+      
+      const updatedMember = await this.roomsService.promoteMember(
+        body.roomId,
+        body.targetUserId,
+        body.role,
+        senderUserId,
+      );
+      
+      const fullRoom = await this.roomsService.findOne(body.roomId);
+      this.server.to(`room_${body.roomId}`).emit('memberRoleUpdated', {
+        roomId: body.roomId,
+        targetUserId: body.targetUserId,
+        role: body.role,
+        room: fullRoom,
+      });
+      
+      return { event: 'promoteMemberSuccess', data: updatedMember };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { event: 'promoteMemberError', data: message };
+    }
+  }
+
+  // KICK MEMBER
+  @SubscribeMessage('kickMember')
+  async kickMember(
+    @MessageBody() body: { roomId: number; targetUserId: number },
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ event: string; data: any }> {
+    try {
+      const senderUserId = client.data.userId;
+      if (!senderUserId) throw new Error('Unauthorized');
+      
+      const result = await this.roomsService.kickMember(
+        body.roomId,
+        body.targetUserId,
+        senderUserId,
+      );
+      
+      const fullRoom = await this.roomsService.findOne(body.roomId);
+      this.server.to(`room_${body.roomId}`).emit('memberKicked', {
+        roomId: body.roomId,
+        targetUserId: body.targetUserId,
+        room: fullRoom,
+      });
+      
+      this.server.to(`user_${body.targetUserId}`).emit('kickedFromRoom', {
+        roomId: body.roomId,
+      });
+
+      if (result.systemMessage) {
+        this.server.to(`room_${body.roomId}`).emit('newMessage', result.systemMessage);
+      }
+      
+      return { event: 'kickMemberSuccess', data: result };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { event: 'kickMemberError', data: message };
+    }
+  }
+
+  // LEAVE ROOM
+  @SubscribeMessage('leaveRoom')
+  async leaveRoom(
+    @MessageBody() body: { roomId: number },
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ success: boolean; data?: Room; error?: string }> {
+    try {
+      const userId = client.data.userId;
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      const { room, systemMessage } = await this.roomsService.leaveRoom(body.roomId, userId);
+      client.leave(`room_${body.roomId}`);
+      
+      this.server.to(`room_${body.roomId}`).emit('roomMemberLeft', {
+        roomId: body.roomId,
+        targetUserId: userId,
+        room,
+      });
+      
+      if (systemMessage) {
+        this.server.to(`room_${body.roomId}`).emit('newMessage', systemMessage);
+      }
+      
+      return { success: true, data: room };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
+  }
+
   // CREATE
   @SubscribeMessage('createRoom')
   async create(
     @MessageBody() createRoomDto: CreateRoomDto,
     @ConnectedSocket() client: Socket,
-  ): Promise<{ event: string; data: Room | string }> {
+  ): Promise<{ success: boolean; data?: Room; error?: string }> {
     try {
       const room = await this.roomsService.create(createRoomDto);
-      client.broadcast.emit('roomCreated', room); // kirim ke client lain
-      return { event: 'createRoom', data: room }; // kirim ke pembuat
+      this.server.emit('roomCreated', room); // kirim ke semua client (termasuk pembuat) agar sidebar & lobby terupdate realtime
+      return { success: true, data: room };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      return { event: 'createRoomError', data: message };
+      return { success: false, error: message };
     }
   }
 
   // FIND ALL
   @SubscribeMessage('findAllRooms')
-  async findAll(): Promise<{ event: string; data: Room[] | string }> {
+  async findAll(): Promise<{ success: boolean; data?: Room[]; error?: string }> {
     try {
       const rooms = await this.roomsService.findAll();
-      return { event: 'findAllRooms', data: rooms };
+      return { success: true, data: rooms };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      return { event: 'findAllRoomsError', data: message };
+      return { success: false, error: message };
     }
   }
 
@@ -77,17 +219,31 @@ export class RoomsGateway {
   @SubscribeMessage('updateRoom')
   async update(
     @MessageBody() updateRoomDto: UpdateRoomDto,
-  ): Promise<{ event: string; data: Room | string }> {
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ success: boolean; data?: Room; error?: string }> {
     try {
+      const senderUserId = client.data.userId;
+      if (!senderUserId) throw new Error('Unauthorized');
+
+      const room = await this.roomsService.findOne(updateRoomDto.id);
+      const isCreator = room.creator && room.creator.user_id === senderUserId;
+      
+      const member = room.roomMembers.find(m => m.user?.user_id === senderUserId);
+      const isAdmin = member && member.role === 'admin';
+      
+      if (!isCreator && !isAdmin) {
+        throw new Error('You do not have permission to update group details');
+      }
+
       const updated = await this.roomsService.update(
         updateRoomDto.id,
         updateRoomDto,
       );
       this.server.emit('roomUpdated', updated);
-      return { event: 'updateRoom', data: updated };
+      return { success: true, data: updated };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      return { event: 'updateRoomError', data: message };
+      return { success: false, error: message };
     }
   }
 

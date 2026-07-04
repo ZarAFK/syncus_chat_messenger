@@ -6,11 +6,14 @@ import { RoomsCategory } from './entities/rooms_category.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { GetRoomsCategoryDto } from 'src/rooms_category/dto/get-room-category.dto';
+import { Room } from 'src/rooms/entities/room.entity';
 @Injectable()
 export class RoomsCategoryService {
   constructor(
     @InjectRepository(RoomsCategory)
     private roomCategoryRepository: Repository<RoomsCategory>,
+    @InjectRepository(Room)
+    private roomRepository: Repository<Room>,
   ) {}
 
   async create(
@@ -23,10 +26,29 @@ export class RoomsCategoryService {
     return roomsCategory;
   }
 
-  async findAll(): Promise<GetRoomsCategoryDto[]> {
+  async findAll(room_id?: number): Promise<GetRoomsCategoryDto[]> {
     const findRoomCategory = await this.roomCategoryRepository.find({
       relations: ['rooms'],
     });
+
+    // const checkRoomExist = await this.roomCategoryRepository.findOne({
+    //   where: { rooms: room_id },
+    // });
+
+    if (room_id) {
+      const categoryWithRoom = await this.roomCategoryRepository.findOne({
+        relations: ['rooms'],
+        where: {
+          rooms: {
+            room_id,
+          },
+        },
+      });
+
+      if (!categoryWithRoom) {
+        throw new NotFoundException(`Room with id ${room_id} has no category`);
+      }
+    }
     return plainToInstance(GetRoomsCategoryDto, findRoomCategory, {
       excludeExtraneousValues: true,
     });

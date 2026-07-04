@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from './config/db.config';
 import { ConfigService, ConfigModule } from '@nestjs/config';
+
+// feature modules
 import { MessagesModule } from './messages/messages.module';
 import { MessagesReadReceiptsModule } from './messages_read_receipts/messages_read_receipts.module';
 import { FriendsModule } from './friends/friends.module';
@@ -15,6 +17,9 @@ import { ProfileModule } from './profile/profile.module';
 import { RoomsCategoryModule } from './rooms_category/rooms_category.module';
 import { RoomMembersModule } from './room_members/room_members.module';
 import { MediaModule } from './media/media.module';
+import { PresenceModule } from './presence/presence.module';
+import { BlockeduserModule } from './blockeduser/blockeduser.module';
+import { AuthGuestModule } from './auth-guest/auth-guest.module';
 
 @Module({
   imports: [
@@ -37,12 +42,11 @@ import { MediaModule } from './media/media.module';
     MediaModule,
     RoomsCategoryModule,
     RoomMembersModule,
-    MediaModule,
     NotificationModule,
     ProfileModule,
-    RoomsCategoryModule,
-    RoomMembersModule,
-    MediaModule,
+    PresenceModule,
+    BlockeduserModule,
+    AuthGuestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

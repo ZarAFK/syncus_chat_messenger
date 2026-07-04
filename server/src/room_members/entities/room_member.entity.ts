@@ -5,7 +5,6 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
-  ManyToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -17,15 +16,19 @@ export class RoomMember {
 
   @ManyToOne(() => Users, (user) => user.roomMembers)
   @JoinColumn({ name: 'user_id' })
-  user_member_room: Users;
+  user: Users;
 
   @ManyToOne(() => Room, (room) => room.roomMembers)
   @JoinColumn({ name: 'room_id' })
-  room_member: Room;
+  room: Room;
 
   @CreateDateColumn({ name: 'joined_at' })
   joinedAt: Date;
 
   @Column({ type: 'timestamp', name: 'left_at', nullable: true })
   leftAt: Date;
+
+  @Column({ type: 'varchar', length: 20, default: 'member' })
+  role: 'admin' | 'member';
 }
+

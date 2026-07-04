@@ -20,13 +20,9 @@ export class Message {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Users, (user) => user.sentMessages, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Users, (user) => user.sentMessages, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'sender_id' })
-  sender: Users;
-
-  @ManyToOne(() => Users, (user) => user.receivedMessages, { nullable: true })
-  @JoinColumn({ name: 'receiver_id' })
-  receiver?: Users;
+  sender?: Users;
 
   @ManyToOne(() => Room, (room) => room.messages, { nullable: true })
   @JoinColumn({ name: 'room_id' })
@@ -54,4 +50,10 @@ export class Message {
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;
+
+  @Column({ type: 'boolean', default: false })
+  is_pinned: boolean;
+
+  @Column({ type: 'text', nullable: true })
+  reactions?: string;
 }
